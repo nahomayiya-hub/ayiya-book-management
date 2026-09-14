@@ -10,41 +10,19 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ===== CORS CONFIGURATION FOR PRODUCTION =====
-const allowedOrigins = [
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'https://ayiya-book-management.vercel.app',
-    'https://ayiya-book-management.netlify.app',
-    'https://your-frontend-url.vercel.app',
-    'https://your-frontend-url.netlify.app'
-];
-
 app.use(cors({
-    origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) !== -1) {
-            callback(null, true);
-        } else {
-            console.log('❌ Blocked by CORS:', origin);
-            callback(null, true); // Allow all in development
-        }
-    },
+    origin: '*',
     credentials: true
 }));
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// ===== DIRECT PAYMENT ROUTE (BEFORE bookRoutes) =====
 app.post('/api/books/:bookId/pay', verifyToken, async (req, res) => {
     try {
         const userId = req.userId;
         const { bookId } = req.params;
         const { paymentMethod } = req.body;
-
-        console.log("💰 Payment request - User:", userId, "Book:", bookId, "Method:", paymentMethod);
 
         const db = require('./config/database');
         const [books] = await db.query('SELECT * FROM books WHERE id = ?', [bookId]);
@@ -54,33 +32,28 @@ app.post('/api/books/:bookId/pay', verifyToken, async (req, res) => {
             return res.status(404).json({ message: 'Book not found' });
         }
 
-        // ===== DISCOUNT LOGIC =====
         let discount = 0;
         let finalAmount = 10.00;
 
-        // Get user type from database
         const [userResult] = await db.query('SELECT user_type FROM users WHERE id = ?', [userId]);
         const userType = userResult[0]?.user_type || 'normal';
 
-        // Apply discounts based on user type
         switch (userType) {
             case 'student':
-                discount = 20; // 20% off
+                discount = 20;
                 break;
             case 'teacher':
-                discount = 15; // 15% off
+                discount = 15;
                 break;
             case 'disabled':
-                discount = 25; // 25% off
+                discount = 25;
                 break;
-            case 'normal':
             default:
                 discount = 0;
-                break;
         }
 
         finalAmount = 10.00 * (1 - discount / 100);
-        finalAmount = Math.round(finalAmount * 100) / 100; // Round to 2 decimal places
+        finalAmount = Math.round(finalAmount * 100) / 100;
 
         const transactionId = `TXN-${Date.now()}-${userId}`;
 
@@ -105,7 +78,6 @@ app.post('/api/books/:bookId/pay', verifyToken, async (req, res) => {
     }
 });
 
-// ===== ROUTES =====
 app.use('/api/auth', authRoutes);
 app.use('/api/books', bookRoutes);
 
